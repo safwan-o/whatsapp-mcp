@@ -1,8 +1,0 @@
-02:26:11.045[36m [Client INFO] Starting WhatsApp client...[0m
-02:26:12.733[36m [Client INFO] Successfully authenticated[0m
-02:26:13.464[36m [Client INFO] Connected to WhatsApp[0m
-
-✓ Connected to WhatsApp! Type 'help' for commands.
-Starting REST API server on :8080...
-REST server is running. Press Ctrl+C to disconnect and exit.
-REST API server error: listen tcp :8080: bind: address already in use

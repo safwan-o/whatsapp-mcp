@@ -1,3 +1,14 @@
+# Databases and Authentication
 *.db
+whatsapp-bridge/store/
+whatsapp-mcp-server/agent_state.json
+
+# Log files
+*.log
+whatsapp-bridge/*.log
+
+# Binaries
+whatsapp-bridge/main
+
+# Configuration
 claude_desktop_config.json
-whatsapp.log
