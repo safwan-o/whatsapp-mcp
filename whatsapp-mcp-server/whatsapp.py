@@ -624,8 +624,12 @@ def get_direct_chat_by_contact(sender_phone_number: str) -> Optional[Chat]:
 
 def send_message(recipient: str, message: str) -> Tuple[bool, str]:
     try:
+        # Automate typing indicator
+        set_presence(recipient, True, "text")
+        
         # Validate input
         if not recipient:
+            set_presence(recipient, False, "text")
             return False, "Recipient must be provided"
         
         url = f"{WHATSAPP_API_BASE_URL}/send"
@@ -636,6 +640,9 @@ def send_message(recipient: str, message: str) -> Tuple[bool, str]:
         
         response = requests.post(url, json=payload)
         
+        # Turn off typing indicator regardless of outcome
+        set_presence(recipient, False, "text")
+        
         # Check if the request was successful
         if response.status_code == 200:
             result = response.json()
@@ -644,22 +651,35 @@ def send_message(recipient: str, message: str) -> Tuple[bool, str]:
             return False, f"Error: HTTP {response.status_code} - {response.text}"
             
     except requests.RequestException as e:
+        set_presence(recipient, False, "text")
         return False, f"Request error: {str(e)}"
     except json.JSONDecodeError:
+        set_presence(recipient, False, "text")
         return False, f"Error parsing response: {response.text}"
     except Exception as e:
+        set_presence(recipient, False, "text")
         return False, f"Unexpected error: {str(e)}"
 
 def send_file(recipient: str, media_path: str) -> Tuple[bool, str]:
     try:
+        # Automate typing indicator
+        presence_type = "text"
+        if media_path and media_path.endswith(('.ogg', '.mp3', '.wav')):
+            presence_type = "audio"
+            
+        set_presence(recipient, True, presence_type)
+        
         # Validate input
         if not recipient:
+            set_presence(recipient, False, presence_type)
             return False, "Recipient must be provided"
         
         if not media_path:
+            set_presence(recipient, False, presence_type)
             return False, "Media path must be provided"
         
         if not os.path.isfile(media_path):
+            set_presence(recipient, False, presence_type)
             return False, f"Media file not found: {media_path}"
         
         url = f"{WHATSAPP_API_BASE_URL}/send"
@@ -670,6 +690,8 @@ def send_file(recipient: str, media_path: str) -> Tuple[bool, str]:
         
         response = requests.post(url, json=payload)
         
+        set_presence(recipient, False, presence_type)
+        
         # Check if the request was successful
         if response.status_code == 200:
             result = response.json()
@@ -678,10 +700,13 @@ def send_file(recipient: str, media_path: str) -> Tuple[bool, str]:
             return False, f"Error: HTTP {response.status_code} - {response.text}"
             
     except requests.RequestException as e:
+        set_presence(recipient, False, presence_type)
         return False, f"Request error: {str(e)}"
     except json.JSONDecodeError:
+        set_presence(recipient, False, presence_type)
         return False, f"Error parsing response: {response.text}"
     except Exception as e:
+        set_presence(recipient, False, presence_type)
         return False, f"Unexpected error: {str(e)}"
 
 def send_audio_message(recipient: str, media_path: str) -> Tuple[bool, str]:
@@ -830,8 +855,13 @@ def acknowledge_message(message_id: str):
         state["processed_ids"] = processed
         save_agent_state(state)
 
-def listen_for_messages(whitelist: List[str], timeout_seconds: int = 30) -> Optional[dict]:
-    """Poll for new messages from whitelisted JIDs."""
+def listen_for_messages(whitelist: List[str], timeout_seconds: int = 30) -> Optional[Dict[str, Any]]:
+    """Poll for new messages from whitelisted JIDs and return them as a batch.
+    
+    Returns:
+        A dictionary containing 'batch_count' and 'chats', where 'chats' maps 
+        chat JIDs to lists of message objects.
+    """
     import time
     start_time = time.time()
     
@@ -858,30 +888,65 @@ def listen_for_messages(whitelist: List[str], timeout_seconds: int = 30) -> Opti
             # Duplicate whitelist for the two placeholders (sender and chat_jid)
             cursor.execute(query, whitelist + whitelist)
             rows = cursor.fetchall()
+            conn.close()
             
+            # Group unread messages
+            unread_messages = []
             for row in rows:
-                msg_id = row[0]
-                if msg_id not in processed_ids:
-                    # Check for exit commands
+                if row[0] not in processed_ids:
+                    unread_messages.append(row)
+            
+            if unread_messages:
+                # Mark all as read immediately
+                chat_ids_map = {}
+                for row in unread_messages:
+                    chat_jid = row[1]
+                    msg_id = row[0]
+                    if chat_jid not in chat_ids_map:
+                        chat_ids_map[chat_jid] = []
+                    chat_ids_map[chat_jid].append(msg_id)
+                
+                for chat_jid, msg_ids in chat_ids_map.items():
+                    mark_as_read(chat_jid, msg_ids)
+                
+                # Construct batch response
+                batch_response = {
+                    "batch_count": len(unread_messages),
+                    "chats": {}
+                }
+                
+                for row in unread_messages:
+                    msg_id = row[0]
+                    chat_jid = row[1]
+                    sender = row[2]
                     content = row[3]
+                    timestamp = row[4]
+                    chat_name = row[5]
+                    media_type = row[6]
+                    
                     is_exit = False
                     if content:
                         clean_content = content.strip().lower()
                         if clean_content in ["exit agent mode", "stop agent", "go offline"]:
                             is_exit = True
-                            
-                    return {
-                        "id": row[0],
-                        "chat_jid": row[1],
-                        "sender": row[2],
-                        "content": row[3],
-                        "timestamp": row[4],
-                        "chat_name": row[5],
-                        "media_type": row[6],
+                    
+                    msg_obj = {
+                        "id": msg_id,
+                        "sender": sender,
+                        "content": content,
+                        "timestamp": timestamp,
+                        "chat_name": chat_name,
+                        "media_type": media_type,
                         "is_exit_command": is_exit
                     }
+                    
+                    if chat_jid not in batch_response["chats"]:
+                        batch_response["chats"][chat_jid] = []
+                    
+                    batch_response["chats"][chat_jid].append(msg_obj)
+                
+                return batch_response
             
-            conn.close()
         except Exception as e:
             print(f"Error in listener: {e}")
         

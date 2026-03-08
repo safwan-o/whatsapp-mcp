@@ -48,29 +48,56 @@ class TestWhatsAppTools(unittest.TestCase):
         )
 
     @patch('sqlite3.connect')
-    def test_listen_for_messages_backlog(self, mock_connect):
+    @patch('whatsapp.mark_as_read') # Mock the internal call
+    def test_listen_for_messages_batch(self, mock_mark_read, mock_connect):
         # Mock DB response
         mock_conn = MagicMock()
         mock_cursor = MagicMock()
         mock_connect.return_value = mock_conn
         mock_conn.cursor.return_value = mock_cursor
         
-        # Return two messages, first is already processed
+        # Return two messages, both new
         # row: id, chat_jid, sender, content, timestamp, chat_name, media_type
         mock_cursor.fetchall.return_value = [
-            ("old_msg", "jid", "sender", "hi", "2026-01-01", "name", ""),
-            ("new_msg", "jid", "sender", "hello", "2026-01-02", "name", "")
+            ("msg1", "jid1", "sender1", "hi", "2026-01-01", "name", ""),
+            ("msg2", "jid1", "sender1", "how are you", "2026-01-02", "name", "")
         ]
         
-        # Mock load_agent_state to return only the old message as processed
-        with patch('whatsapp.load_agent_state', return_value={"processed_ids": ["old_msg"]}):
-            # Call function with short timeout to avoid long loop
-            result = whatsapp.listen_for_messages(["jid"], timeout_seconds=0.1)
+        # Mock load_agent_state to return no processed messages
+        with patch('whatsapp.load_agent_state', return_value={"processed_ids": []}):
+            # Call function with short timeout
+            result = whatsapp.listen_for_messages(["jid1"], timeout_seconds=0.1)
             
-            # Should return the new message
+            # Assertions for batch structure
             self.assertIsNotNone(result)
-            self.assertEqual(result["id"], "new_msg")
-            self.assertEqual(result["content"], "hello")
+            self.assertEqual(result["batch_count"], 2)
+            self.assertIn("jid1", result["chats"])
+            self.assertEqual(len(result["chats"]["jid1"]), 2)
+            self.assertEqual(result["chats"]["jid1"][0]["id"], "msg1")
+            self.assertEqual(result["chats"]["jid1"][1]["id"], "msg2")
+            
+            # Verify automated read receipt
+            # Should be called once for jid1 with both message IDs
+            mock_mark_read.assert_called_with("jid1", ["msg1", "msg2"])
+
+    @patch('requests.post')
+    @patch('whatsapp.set_presence') # Mock the internal call
+    def test_send_message_automated_typing(self, mock_set_presence, mock_post):
+        # Setup mock
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {"success": True}
+        mock_post.return_value = mock_response
+        
+        # Call function
+        whatsapp.send_message("recipient", "message")
+        
+        # Verify automated typing calls
+        # 1. typing=True before send
+        # 2. typing=False after send
+        self.assertEqual(mock_set_presence.call_count, 2)
+        mock_set_presence.assert_any_call("recipient", True, "text")
+        mock_set_presence.assert_any_call("recipient", False, "text")
 
 if __name__ == '__main__':
     unittest.main()

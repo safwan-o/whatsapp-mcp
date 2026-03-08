@@ -24,10 +24,12 @@ mcp = FastMCP("whatsapp")
 
 @mcp.tool()
 def wait_for_message(whitelist: List[str], timeout_seconds: int = 60) -> Optional[Dict[str, Any]]:
-    """Poll for a new message from a whitelisted contact.
+    """Poll for new messages from whitelisted contacts.
     
-    This tool is the 'Trigger' for autonomous mode. It will block until a new 
-    message arrives from one of the specified JIDs or phone numbers.
+    This tool is the 'Trigger' for autonomous mode. It will block until new 
+    messages arrive from the specified JIDs or phone numbers.
+    
+    Returns a BATCH of messages grouped by chat. You should process all of them.
     
     Args:
         whitelist: List of phone numbers (e.g. '1234567890') or JIDs (e.g. '1234567890@s.whatsapp.net') 
@@ -92,14 +94,15 @@ messages and respond on behalf of the user.
 
 ## Operating Loop:
 1. Call `wait_for_message(whitelist=[...])` with your allowed contacts.
-2. If a message is returned:
-   - Immediately call `mark_as_read(chat_jid=..., message_ids=[...])`.
-   - Call `set_typing(chat_jid=..., is_typing=True)` while you process the request.
-   - Identify the sender and their intent.
-   - Use your available tools (search, files, internet, etc.) to fulfill their request.
-   - Reply using `send_message` or `send_file`.
-   - Call `set_typing(chat_jid=..., is_typing=False)` after sending the reply.
-   - IMPORTANT: Call `acknowledge_message(message_id=...)` immediately after responding.
+2. If messages are returned (it returns a BATCH object):
+   - The response looks like: `{ "batch_count": 2, "chats": { "jid1": [msg1, msg2], "jid2": [msg3] } }`
+   - Iterate through each chat in `chats`.
+   - For each chat:
+     - Review all new messages.
+     - Formulate a response (or responses) based on the context of all messages.
+     - Use `send_message` or `send_file` to reply.
+     - NOTE: Typing indicators and Read receipts are now AUTOMATED. You do NOT need to call `mark_as_read` or `set_typing` manually.
+     - IMPORTANT: Call `acknowledge_message(message_id=...)` for EACH processed message ID to prevent loops.
 3. Repeat the loop.
 
 ## Security & Privacy:
