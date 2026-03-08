@@ -136,10 +136,12 @@ Claude can access the following tools to interact with WhatsApp:
 - **get_contact_chats**: List all chats involving a specific contact
 - **get_last_interaction**: Get the most recent message with a contact
 - **get_message_context**: Retrieve context around a specific message
-- **send_message**: Send a WhatsApp message to a specified phone number or group JID
-- **send_file**: Send a file (image, video, raw audio, document) to a specified recipient
-- **send_audio_message**: Send an audio file as a WhatsApp voice message (requires the file to be an .ogg opus file or ffmpeg must be installed)
+- **send_message**: Send a WhatsApp message to a recipient. Supports `reply_to_id` for quoting specific messages.
+- **send_file**: Send a file (image, video, raw audio, document) to a recipient. Supports `reply_to_id`.
+- **send_audio_message**: Send an audio file as a WhatsApp voice message. Supports `reply_to_id`.
 - **download_media**: Download media from a WhatsApp message and get the local file path
+- **mark_as_read**: Manually mark messages as read (Note: This is automated in agent mode)
+- **set_typing**: Manually control the typing indicator (Note: This is automated in agent mode)
 
 ### Media Handling Features
 
@@ -173,12 +175,14 @@ To activate the mode, give your AI agent the following instruction:
 > "Enter WhatsApp agent mode for my number [YOUR_NUMBER]. Use the `wait_for_message` tool to start listening."
 
 ### Agent Workflow
-When in this mode, the agent follows a continuous loop:
+When in this mode, the agent follows an optimized, batch-aware loop:
 1.  Calls `wait_for_message` (blocking call).
-2.  Upon message arrival, processes the request using its available tools (terminal, file system, internet search).
-3.  Sends a reply via `send_message`.
-4.  Calls `acknowledge_message` to mark the task as complete.
-5.  Repeats.
+2.  Upon message arrival, receives a **Batch Object** containing all new messages since the last poll.
+3.  **Automated Read Receipts**: Messages are automatically marked as "seen" upon retrieval.
+4.  **Automated Typing Indicator**: The agent automatically shows as "typing..." while processing its response.
+5.  **Contextual Reply**: Processes the request using its available tools and sends a reply (optionally quoting specific messages using `reply_to_id`).
+6.  Calls `acknowledge_message` for each processed message to clear the queue.
+7.  Repeats.
 
 ### Security & Exiting
 - **Whitelist**: The agent will ignore any messages from numbers not in your specified list.
