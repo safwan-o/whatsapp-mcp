@@ -823,7 +823,15 @@ def listen_for_messages(whitelist: List[str], timeout_seconds: int = 30) -> Opti
             
             if row:
                 msg_id = row[0]
+                content = row[3]
                 if msg_id not in processed_ids:
+                    # Check for exit commands
+                    is_exit = False
+                    if content:
+                        clean_content = content.strip().lower()
+                        if clean_content in ["exit agent mode", "stop agent", "go offline"]:
+                            is_exit = True
+                            
                     return {
                         "id": row[0],
                         "chat_jid": row[1],
@@ -831,7 +839,8 @@ def listen_for_messages(whitelist: List[str], timeout_seconds: int = 30) -> Opti
                         "content": row[3],
                         "timestamp": row[4],
                         "chat_name": row[5],
-                        "media_type": row[6]
+                        "media_type": row[6],
+                        "is_exit_command": is_exit
                     }
             
             conn.close()

@@ -159,6 +159,35 @@ You can send various media types to your WhatsApp contacts:
 
 By default, just the metadata of the media is stored in the local database. The message will indicate that media was sent. To access this media you need to use the download_media tool which takes the `message_id` and `chat_jid` (which are shown when printing messages containing the meda), this downloads the media and then returns the file path which can be then opened or passed to another tool.
 
+## Autonomous Agent Mode
+
+The WhatsApp MCP server supports an **Autonomous Agent Mode**, similar to OpenClaw. This allows a connected LLM (like Claude or Gemini) to proactively monitor for incoming messages from whitelisted contacts and respond on your behalf.
+
+### Setup
+1.  **Register the Server**: Follow the installation steps to connect the MCP server to your LLM client.
+2.  **Enable Whitelist**: Prepare a list of phone numbers (with country code) or WhatsApp JIDs that the agent is allowed to communicate with.
+3.  **Start the Bridge**: Ensure the Go bridge is running (`cd whatsapp-bridge && go run main.go`).
+
+### Usage
+To activate the mode, give your AI agent the following instruction:
+> "Enter WhatsApp agent mode for my number [YOUR_NUMBER]. Use the `wait_for_message` tool to start listening."
+
+### Agent Workflow
+When in this mode, the agent follows a continuous loop:
+1.  Calls `wait_for_message` (blocking call).
+2.  Upon message arrival, processes the request using its available tools (terminal, file system, internet search).
+3.  Sends a reply via `send_message`.
+4.  Calls `acknowledge_message` to mark the task as complete.
+5.  Repeats.
+
+### Security & Exiting
+- **Whitelist**: The agent will ignore any messages from numbers not in your specified list.
+- **Exit Commands**: You can stop the agent remotely by sending any of these messages from your phone:
+  - `exit agent mode`
+  - `stop agent`
+  - `go offline`
+- **Session Duration**: The mode is active as long as the current LLM session is running and calling the listening tool.
+
 ## Technical Details
 
 1. Claude sends requests to the Python MCP server
