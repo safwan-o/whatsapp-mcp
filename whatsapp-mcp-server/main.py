@@ -14,7 +14,9 @@ from whatsapp import (
     send_audio_message as whatsapp_audio_voice_message,
     download_media as whatsapp_download_media,
     listen_for_messages as whatsapp_listen_for_messages,
-    acknowledge_message as whatsapp_acknowledge_message
+    acknowledge_message as whatsapp_acknowledge_message,
+    mark_as_read as whatsapp_mark_as_read,
+    set_presence as whatsapp_set_presence
 )
 
 # Initialize FastMCP server
@@ -53,6 +55,29 @@ def acknowledge_message(message_id: str) -> str:
     return "Message acknowledged."
 
 @mcp.tool()
+def mark_as_read(chat_jid: str, message_ids: Optional[List[str]] = None) -> Dict[str, Any]:
+    """Mark a message or all messages in a chat as read.
+    
+    Args:
+        chat_jid: The JID of the chat (e.g., "123456789@s.whatsapp.net" or "123456789@g.us")
+        message_ids: Optional list of message IDs to mark as read. If omitted, all messages in the chat are marked as read.
+    """
+    success, message = whatsapp_mark_as_read(chat_jid, message_ids)
+    return {"success": success, "message": message}
+
+@mcp.tool()
+def set_typing(chat_jid: str, is_typing: bool, media_type: str = "text") -> Dict[str, Any]:
+    """Show or hide the typing/recording indicator in a chat.
+    
+    Args:
+        chat_jid: The JID of the chat
+        is_typing: True to show indicator, False to hide it
+        media_type: Type of message being prepared: "text" (typing...) or "audio" (recording audio...)
+    """
+    success, message = whatsapp_set_presence(chat_jid, is_typing, media_type)
+    return {"success": success, "message": message}
+
+@mcp.tool()
 def get_agent_instructions() -> str:
     """Get the system prompt and instructions for running in autonomous WhatsApp mode.
     
@@ -68,9 +93,12 @@ messages and respond on behalf of the user.
 ## Operating Loop:
 1. Call `wait_for_message(whitelist=[...])` with your allowed contacts.
 2. If a message is returned:
+   - Immediately call `mark_as_read(chat_jid=..., message_ids=[...])`.
+   - Call `set_typing(chat_jid=..., is_typing=True)` while you process the request.
    - Identify the sender and their intent.
    - Use your available tools (search, files, internet, etc.) to fulfill their request.
    - Reply using `send_message` or `send_file`.
+   - Call `set_typing(chat_jid=..., is_typing=False)` after sending the reply.
    - IMPORTANT: Call `acknowledge_message(message_id=...)` immediately after responding.
 3. Repeat the loop.
 

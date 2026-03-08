@@ -1,0 +1,25 @@
+00:57:19.869[36m [Client INFO] Starting WhatsApp client...[0m
+00:57:22.047[36m [Client INFO] Successfully authenticated[0m
+00:57:23.020[36m [Client INFO] Connected to WhatsApp[0m
+00:57:23.031[36m [Client INFO] Using existing chat name for 8801575784902@s.whatsapp.net: 8801575784902[0m
+
+✓ Connected to WhatsApp! Type 'help' for commands.
+Starting REST API server on :8080...
+REST server is running. Press Ctrl+C to disconnect and exit.
+01:30:20.995[33m [Client WARN] Unavailable message AC6629DF8636D300A07B99AFFB76823C from 209375612387334@lid (type: "")[0m
+01:30:22.420[36m [Client INFO] Getting name for contact: 209375612387334@lid[0m
+01:30:22.420[36m [Client INFO] Using contact name: 209375612387334[0m
+[2026-03-09 01:30:22] ← 209375612387334: Hello
+01:30:23.439[36m [Client INFO] Using existing chat name for 8801861249200@s.whatsapp.net: 8801861249200[0m
+[2026-03-09 01:30:20] ← 8801861249200: Hello
+01:30:23.443[36m [Client INFO] Using existing chat name for 8801575784902@s.whatsapp.net: 8801575784902[0m
+Received request to send message Hello! How can I help you today? 
+Message sent true Message sent to 8801861249200@s.whatsapp.net
+01:31:01.119[36m [Client INFO] Using existing chat name for 209375612387334@lid: 209375612387334[0m
+[2026-03-09 01:31:00] ← 209375612387334: What day is it today?
+01:32:17.100[36m [Client INFO] Using existing chat name for 209375612387334@lid: 209375612387334[0m
+[2026-03-09 01:32:16] ← 209375612387334: What day is it today?
+01:32:46.806[36m [Client INFO] Using existing chat name for 209375612387334@lid: 209375612387334[0m
+[2026-03-09 01:32:46] ← 209375612387334: Can you even see my message??
+01:33:09.947[36m [Client INFO] Using existing chat name for 209375612387334@lid: 209375612387334[0m
+[2026-03-09 01:33:09] ← 209375612387334: Exit listening mode

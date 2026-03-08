@@ -724,6 +724,44 @@ def send_audio_message(recipient: str, media_path: str) -> Tuple[bool, str]:
     except Exception as e:
         return False, f"Unexpected error: {str(e)}"
 
+def mark_as_read(chat_jid: str, message_ids: List[str] = None) -> Tuple[bool, str]:
+    """Mark messages in a chat as read. If message_ids is None, marks everything as read."""
+    if message_ids is None:
+        message_ids = []
+        
+    payload = {
+        "chat_jid": chat_jid,
+        "message_ids": message_ids
+    }
+    
+    try:
+        response = requests.post(f"{WHATSAPP_API_BASE_URL}/read", json=payload)
+        if response.status_code == 200:
+            result = response.json()
+            return result.get("success", False), result.get("message", "Unknown response")
+        else:
+            return False, f"Error: HTTP {response.status_code} - {response.text}"
+    except Exception as e:
+        return False, f"Error marking as read: {e}"
+
+def set_presence(chat_jid: str, is_typing: bool, media_type: str = "text") -> Tuple[bool, str]:
+    """Set the chat presence (typing indicator)."""
+    payload = {
+        "chat_jid": chat_jid,
+        "is_typing": is_typing,
+        "media_type": media_type
+    }
+    
+    try:
+        response = requests.post(f"{WHATSAPP_API_BASE_URL}/presence", json=payload)
+        if response.status_code == 200:
+            result = response.json()
+            return result.get("success", False), result.get("message", "Unknown response")
+        else:
+            return False, f"Error: HTTP {response.status_code} - {response.text}"
+    except Exception as e:
+        return False, f"Error setting presence: {e}"
+
 def download_media(message_id: str, chat_jid: str) -> Optional[str]:
     """Download media from a message and return the local file path.
     
@@ -805,7 +843,8 @@ def listen_for_messages(whitelist: List[str], timeout_seconds: int = 30) -> Opti
             conn = sqlite3.connect(MESSAGES_DB_PATH)
             cursor = conn.cursor()
             
-            # Find the latest message from any whitelisted sender that isn't from me
+            # Find unprocessed messages from any whitelisted sender that isn't from me
+            # We sort by timestamp ASC to process messages in order
             placeholders = ','.join(['?'] * len(whitelist))
             query = f"""
                 SELECT m.id, m.chat_jid, m.sender, m.content, m.timestamp, c.name, m.media_type
@@ -813,19 +852,18 @@ def listen_for_messages(whitelist: List[str], timeout_seconds: int = 30) -> Opti
                 JOIN chats c ON m.chat_jid = c.jid
                 WHERE (m.sender IN ({placeholders}) OR m.chat_jid IN ({placeholders}))
                 AND m.is_from_me = 0
-                ORDER BY m.timestamp DESC
-                LIMIT 1
+                ORDER BY m.timestamp ASC
             """
             
             # Duplicate whitelist for the two placeholders (sender and chat_jid)
             cursor.execute(query, whitelist + whitelist)
-            row = cursor.fetchone()
+            rows = cursor.fetchall()
             
-            if row:
+            for row in rows:
                 msg_id = row[0]
-                content = row[3]
                 if msg_id not in processed_ids:
                     # Check for exit commands
+                    content = row[3]
                     is_exit = False
                     if content:
                         clean_content = content.strip().lower()
@@ -847,6 +885,7 @@ def listen_for_messages(whitelist: List[str], timeout_seconds: int = 30) -> Opti
         except Exception as e:
             print(f"Error in listener: {e}")
         
-        time.sleep(2) # Poll every 2 seconds
+        # Poll every 1 second for faster response
+        time.sleep(1)
         
     return None
