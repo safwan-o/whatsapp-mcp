@@ -12,11 +12,73 @@ from whatsapp import (
     send_message as whatsapp_send_message,
     send_file as whatsapp_send_file,
     send_audio_message as whatsapp_audio_voice_message,
-    download_media as whatsapp_download_media
+    download_media as whatsapp_download_media,
+    listen_for_messages as whatsapp_listen_for_messages,
+    acknowledge_message as whatsapp_acknowledge_message
 )
 
 # Initialize FastMCP server
 mcp = FastMCP("whatsapp")
+
+@mcp.tool()
+def wait_for_message(whitelist: List[str], timeout_seconds: int = 60) -> Optional[Dict[str, Any]]:
+    """Poll for a new message from a whitelisted contact.
+    
+    This tool is the 'Trigger' for autonomous mode. It will block until a new 
+    message arrives from one of the specified JIDs or phone numbers.
+    
+    Args:
+        whitelist: List of phone numbers (e.g. '1234567890') or JIDs (e.g. '1234567890@s.whatsapp.net') 
+                  that the agent is allowed to respond to.
+        timeout_seconds: Maximum time to wait before returning (default 60).
+    """
+    # Clean whitelist to ensure JID format
+    clean_whitelist = []
+    for item in whitelist:
+        if "@" not in item:
+            clean_whitelist.append(f"{item}@s.whatsapp.net")
+        else:
+            clean_whitelist.append(item)
+            
+    return whatsapp_listen_for_messages(clean_whitelist, timeout_seconds)
+
+@mcp.tool()
+def acknowledge_message(message_id: str) -> str:
+    """Mark a message as processed so the agent doesn't respond to it again.
+    
+    Args:
+        message_id: The ID of the message to acknowledge.
+    """
+    whatsapp_acknowledge_message(message_id)
+    return "Message acknowledged."
+
+@mcp.tool()
+def get_agent_instructions() -> str:
+    """Get the system prompt and instructions for running in autonomous WhatsApp mode.
+    
+    Call this tool to understand how to loop and respond to whitelisted users 
+    proactively.
+    """
+    return """
+# WhatsApp Autonomous Agent Mode
+
+You are now operating as an autonomous WhatsApp assistant. Your goal is to monitor for incoming 
+messages and respond on behalf of the user.
+
+## Operating Loop:
+1. Call `wait_for_message(whitelist=[...])` with your allowed contacts.
+2. If a message is returned:
+   - Identify the sender and their intent.
+   - Use your available tools (search, files, internet, etc.) to fulfill their request.
+   - Reply using `send_message` or `send_file`.
+   - IMPORTANT: Call `acknowledge_message(message_id=...)` immediately after responding.
+3. Repeat the loop.
+
+## Security & Privacy:
+- ONLY respond to users in the whitelist.
+- You have access to the user's local filesystem and tools. Be helpful but cautious.
+- If unsure about a request, ask for clarification via WhatsApp.
+"""
 
 @mcp.tool()
 def search_contacts(query: str) -> List[Dict[str, Any]]:

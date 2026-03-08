@@ -765,3 +765,79 @@ def download_media(message_id: str, chat_jid: str) -> Optional[str]:
     except Exception as e:
         print(f"Unexpected error: {str(e)}")
         return None
+
+AGENT_STATE_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'agent_state.json')
+
+def load_agent_state() -> dict:
+    if os.path.exists(AGENT_STATE_PATH):
+        try:
+            with open(AGENT_STATE_PATH, 'r') as f:
+                return json.load(f)
+        except:
+            return {}
+    return {}
+
+def save_agent_state(state: dict):
+    with open(AGENT_STATE_PATH, 'w') as f:
+        json.dump(state, f)
+
+def acknowledge_message(message_id: str):
+    state = load_agent_state()
+    processed = state.get("processed_ids", [])
+    if message_id not in processed:
+        processed.append(message_id)
+        # Keep last 1000 IDs to avoid file bloat
+        if len(processed) > 1000:
+            processed = processed[-1000:]
+        state["processed_ids"] = processed
+        save_agent_state(state)
+
+def listen_for_messages(whitelist: List[str], timeout_seconds: int = 30) -> Optional[dict]:
+    """Poll for new messages from whitelisted JIDs."""
+    import time
+    start_time = time.time()
+    
+    state = load_agent_state()
+    processed_ids = set(state.get("processed_ids", []))
+    
+    while time.time() - start_time < timeout_seconds:
+        try:
+            conn = sqlite3.connect(MESSAGES_DB_PATH)
+            cursor = conn.cursor()
+            
+            # Find the latest message from any whitelisted sender that isn't from me
+            placeholders = ','.join(['?'] * len(whitelist))
+            query = f"""
+                SELECT m.id, m.chat_jid, m.sender, m.content, m.timestamp, c.name, m.media_type
+                FROM messages m
+                JOIN chats c ON m.chat_jid = c.jid
+                WHERE (m.sender IN ({placeholders}) OR m.chat_jid IN ({placeholders}))
+                AND m.is_from_me = 0
+                ORDER BY m.timestamp DESC
+                LIMIT 1
+            """
+            
+            # Duplicate whitelist for the two placeholders (sender and chat_jid)
+            cursor.execute(query, whitelist + whitelist)
+            row = cursor.fetchone()
+            
+            if row:
+                msg_id = row[0]
+                if msg_id not in processed_ids:
+                    return {
+                        "id": row[0],
+                        "chat_jid": row[1],
+                        "sender": row[2],
+                        "content": row[3],
+                        "timestamp": row[4],
+                        "chat_name": row[5],
+                        "media_type": row[6]
+                    }
+            
+            conn.close()
+        except Exception as e:
+            print(f"Error in listener: {e}")
+        
+        time.sleep(2) # Poll every 2 seconds
+        
+    return None
