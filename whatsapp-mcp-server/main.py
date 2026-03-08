@@ -98,11 +98,13 @@ messages and respond on behalf of the user.
    - The response looks like: `{ "batch_count": 2, "chats": { "jid1": [msg1, msg2], "jid2": [msg3] } }`
    - Iterate through each chat in `chats`.
    - For each chat:
-     - Review all new messages.
-     - Formulate a response (or responses) based on the context of all messages.
-     - Use `send_message` or `send_file` to reply.
-     - NOTE: Typing indicators and Read receipts are now AUTOMATED. You do NOT need to call `mark_as_read` or `set_typing` manually.
-     - IMPORTANT: Call `acknowledge_message(message_id=...)` for EACH processed message ID to prevent loops.
+   - Review all new messages.
+   - Formulate a response (or responses) based on the context of all messages.
+   - Use `send_message` or `send_file` to reply. 
+   - **REPLY FEATURE:** You can now reply to a specific message by providing its `id` in the `reply_to_id` parameter. This will "quote" the message in WhatsApp. Use this for clarity when responding to specific points in a multi-message batch.
+   - NOTE: Typing indicators and Read receipts are now AUTOMATED. You do NOT need to call `mark_as_read` or `set_typing` manually.
+   - IMPORTANT: Call `acknowledge_message(message_id=...)` for EACH processed message ID to prevent loops.
+
 3. Repeat the loop.
 
 ## Security & Privacy:
@@ -250,7 +252,8 @@ def get_message_context(
 @mcp.tool()
 def send_message(
     recipient: str,
-    message: str
+    message: str,
+    reply_to_id: Optional[str] = None
 ) -> Dict[str, Any]:
     """Send a WhatsApp message to a person or group. For group chats use the JID.
 
@@ -258,6 +261,7 @@ def send_message(
         recipient: The recipient - either a phone number with country code but no + or other symbols,
                  or a JID (e.g., "123456789@s.whatsapp.net" or a group JID like "123456789@g.us")
         message: The message text to send
+        reply_to_id: Optional ID of the message to reply to (quotes the message)
     
     Returns:
         A dictionary containing success status and a status message
@@ -270,45 +274,49 @@ def send_message(
         }
     
     # Call the whatsapp_send_message function with the unified recipient parameter
-    success, status_message = whatsapp_send_message(recipient, message)
+    success, status_message = whatsapp_send_message(recipient, message, reply_to_id)
     return {
         "success": success,
         "message": status_message
     }
 
 @mcp.tool()
-def send_file(recipient: str, media_path: str) -> Dict[str, Any]:
-    """Send a file such as a picture, raw audio, video or document via WhatsApp to the specified recipient. For group messages use the JID.
+def send_file(recipient: str, media_path: str, reply_to_id: Optional[str] = None) -> Dict[str, Any]:
+    """Send a file such as a picture, raw audio, video or document via WhatsApp to the specified recipient. 
+    For group messages use the JID.
     
     Args:
         recipient: The recipient - either a phone number with country code but no + or other symbols,
                  or a JID (e.g., "123456789@s.whatsapp.net" or a group JID like "123456789@g.us")
         media_path: The absolute path to the media file to send (image, video, document)
+        reply_to_id: Optional ID of the message to reply to (quotes the message)
     
     Returns:
         A dictionary containing success status and a status message
     """
     
     # Call the whatsapp_send_file function
-    success, status_message = whatsapp_send_file(recipient, media_path)
+    success, status_message = whatsapp_send_file(recipient, media_path, reply_to_id)
     return {
         "success": success,
         "message": status_message
     }
 
 @mcp.tool()
-def send_audio_message(recipient: str, media_path: str) -> Dict[str, Any]:
-    """Send any audio file as a WhatsApp audio message to the specified recipient. For group messages use the JID. If it errors due to ffmpeg not being installed, use send_file instead.
+def send_audio_message(recipient: str, media_path: str, reply_to_id: Optional[str] = None) -> Dict[str, Any]:
+    """Send any audio file as a WhatsApp audio message to the specified recipient. 
+    For group messages use the JID. If it errors due to ffmpeg not being installed, use send_file instead.
     
     Args:
         recipient: The recipient - either a phone number with country code but no + or other symbols,
                  or a JID (e.g., "123456789@s.whatsapp.net" or a group JID like "123456789@g.us")
         media_path: The absolute path to the audio file to send (will be converted to Opus .ogg if it's not a .ogg file)
+        reply_to_id: Optional ID of the message to reply to (quotes the message)
     
     Returns:
         A dictionary containing success status and a status message
     """
-    success, status_message = whatsapp_audio_voice_message(recipient, media_path)
+    success, status_message = whatsapp_audio_voice_message(recipient, media_path, reply_to_id)
     return {
         "success": success,
         "message": status_message

@@ -622,7 +622,7 @@ def get_direct_chat_by_contact(sender_phone_number: str) -> Optional[Chat]:
         if 'conn' in locals():
             conn.close()
 
-def send_message(recipient: str, message: str) -> Tuple[bool, str]:
+def send_message(recipient: str, message: str, reply_to_id: Optional[str] = None) -> Tuple[bool, str]:
     try:
         # Automate typing indicator
         set_presence(recipient, True, "text")
@@ -636,6 +636,7 @@ def send_message(recipient: str, message: str) -> Tuple[bool, str]:
         payload = {
             "recipient": recipient,
             "message": message,
+            "reply_to_id": reply_to_id
         }
         
         response = requests.post(url, json=payload)
@@ -660,7 +661,7 @@ def send_message(recipient: str, message: str) -> Tuple[bool, str]:
         set_presence(recipient, False, "text")
         return False, f"Unexpected error: {str(e)}"
 
-def send_file(recipient: str, media_path: str) -> Tuple[bool, str]:
+def send_file(recipient: str, media_path: str, reply_to_id: Optional[str] = None) -> Tuple[bool, str]:
     try:
         # Automate typing indicator
         presence_type = "text"
@@ -685,7 +686,8 @@ def send_file(recipient: str, media_path: str) -> Tuple[bool, str]:
         url = f"{WHATSAPP_API_BASE_URL}/send"
         payload = {
             "recipient": recipient,
-            "media_path": media_path
+            "media_path": media_path,
+            "reply_to_id": reply_to_id
         }
         
         response = requests.post(url, json=payload)

@@ -99,5 +99,23 @@ class TestWhatsAppTools(unittest.TestCase):
         mock_set_presence.assert_any_call("recipient", True, "text")
         mock_set_presence.assert_any_call("recipient", False, "text")
 
+    @patch('requests.post')
+    @patch('whatsapp.set_presence')
+    def test_send_message_with_reply(self, mock_set_presence, mock_post):
+        # Setup mock
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {"success": True}
+        mock_post.return_value = mock_response
+        
+        # Call function with reply_to_id
+        whatsapp.send_message("recipient", "message", reply_to_id="msg123")
+        
+        # Verify payload contains reply_to_id
+        mock_post.assert_called_with(
+            f"{whatsapp.WHATSAPP_API_BASE_URL}/send",
+            json={"recipient": "recipient", "message": "message", "reply_to_id": "msg123"}
+        )
+
 if __name__ == '__main__':
     unittest.main()
