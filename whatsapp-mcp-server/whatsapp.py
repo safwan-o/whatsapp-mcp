@@ -711,32 +711,42 @@ def send_file(recipient: str, media_path: str, reply_to_id: Optional[str] = None
         set_presence(recipient, False, presence_type)
         return False, f"Unexpected error: {str(e)}"
 
-def send_audio_message(recipient: str, media_path: str) -> Tuple[bool, str]:
+def send_audio_message(recipient: str, media_path: str, reply_to_id: Optional[str] = None) -> Tuple[bool, str]:
     try:
+        # Automate typing indicator (recording audio)
+        set_presence(recipient, True, "audio")
+
         # Validate input
         if not recipient:
+            set_presence(recipient, False, "audio")
             return False, "Recipient must be provided"
         
         if not media_path:
+            set_presence(recipient, False, "audio")
             return False, "Media path must be provided"
         
         if not os.path.isfile(media_path):
+            set_presence(recipient, False, "audio")
             return False, f"Media file not found: {media_path}"
 
         if not media_path.endswith(".ogg"):
             try:
                 media_path = audio.convert_to_opus_ogg_temp(media_path)
             except Exception as e:
+                set_presence(recipient, False, "audio")
                 return False, f"Error converting file to opus ogg. You likely need to install ffmpeg: {str(e)}"
         
         url = f"{WHATSAPP_API_BASE_URL}/send"
         payload = {
             "recipient": recipient,
-            "media_path": media_path
+            "media_path": media_path,
+            "reply_to_id": reply_to_id
         }
         
         response = requests.post(url, json=payload)
         
+        set_presence(recipient, False, "audio")
+
         # Check if the request was successful
         if response.status_code == 200:
             result = response.json()
@@ -745,10 +755,13 @@ def send_audio_message(recipient: str, media_path: str) -> Tuple[bool, str]:
             return False, f"Error: HTTP {response.status_code} - {response.text}"
             
     except requests.RequestException as e:
+        set_presence(recipient, False, "audio")
         return False, f"Request error: {str(e)}"
     except json.JSONDecodeError:
+        set_presence(recipient, False, "audio")
         return False, f"Error parsing response: {response.text}"
     except Exception as e:
+        set_presence(recipient, False, "audio")
         return False, f"Unexpected error: {str(e)}"
 
 def mark_as_read(chat_jid: str, message_ids: List[str] = None) -> Tuple[bool, str]:
