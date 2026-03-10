@@ -977,6 +977,21 @@ func startRESTServer(client *whatsmeow.Client, messageStore *MessageStore, port 
 		})
 	})
 
+	// Handler for health check
+	http.HandleFunc("/api/health", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		status := "connected"
+		if !client.IsConnected() {
+			status = "disconnected"
+		}
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success":   true,
+			"status":    status,
+			"connected": client.IsConnected(),
+			"logged_in": client.IsLoggedIn(),
+		})
+	})
+
 	// Start the server
 	serverAddr := fmt.Sprintf(":%d", port)
 	fmt.Printf("Starting REST API server on %s...\n", serverAddr)

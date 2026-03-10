@@ -8,7 +8,59 @@ import json
 import audio
 
 MESSAGES_DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'whatsapp-bridge', 'store', 'messages.db')
+BRIDGE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'whatsapp-bridge')
+BRIDGE_BINARY = os.path.join(BRIDGE_DIR, 'main')
 WHATSAPP_API_BASE_URL = "http://localhost:8080/api"
+
+def check_bridge_health() -> Dict[str, Any]:
+    """Check if the WhatsApp bridge is running and connected."""
+    try:
+        response = requests.get(f"{WHATSAPP_API_BASE_URL}/health", timeout=2)
+        if response.status_code == 200:
+            return response.json()
+        return {"success": False, "error": f"HTTP {response.status_code}"}
+    except requests.exceptions.RequestException as e:
+        return {"success": False, "error": str(e)}
+
+def ensure_bridge_running() -> bool:
+    """Ensure the bridge is running, attempt to start it if not."""
+    health = check_bridge_health()
+    if health.get("success") and health.get("connected"):
+        return True
+    
+    print("WhatsApp bridge is not connected. Attempting to start/restart...")
+    
+    # Try to start the bridge process
+    import subprocess
+    import time
+    
+    try:
+        # Check if binary exists
+        if not os.path.exists(BRIDGE_BINARY):
+            print(f"Bridge binary not found at {BRIDGE_BINARY}. Please build it first.")
+            return False
+            
+        # Kill any existing process on port 8080
+        subprocess.run(["lsof", "-t", "-i", ":8080", "|", "xargs", "kill", "-9"], shell=True, stderr=subprocess.DEVNULL)
+        time.sleep(1)
+        
+        # Start the bridge in the background
+        log_file = open(os.path.join(BRIDGE_DIR, 'bridge_auto.log'), 'a')
+        subprocess.Popen([BRIDGE_BINARY], cwd=BRIDGE_DIR, stdout=log_file, stderr=log_file)
+        
+        # Wait for it to start and connect
+        for i in range(15):
+            time.sleep(2)
+            health = check_bridge_health()
+            if health.get("success") and health.get("connected"):
+                print("Bridge started and connected successfully.")
+                return True
+            print(f"Waiting for bridge to connect... ({i+1}/15)")
+            
+        return False
+    except Exception as e:
+        print(f"Error starting bridge: {e}")
+        return False
 
 @dataclass
 class Message:
@@ -646,6 +698,10 @@ def resolve_jids(phone_number: str) -> List[str]:
             conn.close()
 
 def send_message(recipient: str, message: str, reply_to_id: Optional[str] = None) -> Tuple[bool, str]:
+    # Ensure bridge is running
+    if not ensure_bridge_running():
+        return False, "WhatsApp bridge is not connected."
+
     try:
         # Automate typing indicator
         set_presence(recipient, True, "text")
@@ -685,6 +741,10 @@ def send_message(recipient: str, message: str, reply_to_id: Optional[str] = None
         return False, f"Unexpected error: {str(e)}"
 
 def send_file(recipient: str, media_path: str, reply_to_id: Optional[str] = None) -> Tuple[bool, str]:
+    # Ensure bridge is running
+    if not ensure_bridge_running():
+        return False, "WhatsApp bridge is not connected."
+
     try:
         # Automate typing indicator
         presence_type = "text"
@@ -735,6 +795,10 @@ def send_file(recipient: str, media_path: str, reply_to_id: Optional[str] = None
         return False, f"Unexpected error: {str(e)}"
 
 def send_audio_message(recipient: str, media_path: str, reply_to_id: Optional[str] = None) -> Tuple[bool, str]:
+    # Ensure bridge is running
+    if not ensure_bridge_running():
+        return False, "WhatsApp bridge is not connected."
+
     try:
         # Automate typing indicator (recording audio)
         set_presence(recipient, True, "audio")
@@ -804,6 +868,8 @@ def mark_as_read(chat_jid: str, message_ids: List[str] = None) -> Tuple[bool, st
             return result.get("success", False), result.get("message", "Unknown response")
         else:
             return False, f"Error: HTTP {response.status_code} - {response.text}"
+    except requests.exceptions.ConnectionError:
+        return False, "Bridge connection error"
     except Exception as e:
         return False, f"Error marking as read: {e}"
 
@@ -822,6 +888,8 @@ def set_presence(chat_jid: str, is_typing: bool, media_type: str = "text") -> Tu
             return result.get("success", False), result.get("message", "Unknown response")
         else:
             return False, f"Error: HTTP {response.status_code} - {response.text}"
+    except requests.exceptions.ConnectionError:
+        return False, "Bridge connection error"
     except Exception as e:
         return False, f"Error setting presence: {e}"
 
@@ -894,12 +962,15 @@ def acknowledge_message(message_id: str):
         save_agent_state(state)
 
 def listen_for_messages(whitelist: List[str], timeout_seconds: int = 30) -> Optional[Dict[str, Any]]:
-    """Poll for new messages from whitelisted JIDs and return them as a batch.
-    
-    Returns:
-        A dictionary containing 'batch_count' and 'chats', where 'chats' maps 
-        chat JIDs to lists of message objects.
-    """
+    """Poll for new messages from whitelisted JIDs and return them as a batch."""
+    # Ensure bridge is running before waiting
+    if not ensure_bridge_running():
+        return {
+            "error": "WhatsApp bridge is not connected. Please ensure you have scanned the QR code and the bridge is running.",
+            "batch_count": 0,
+            "chats": {}
+        }
+
     import time
     start_time = time.time()
     

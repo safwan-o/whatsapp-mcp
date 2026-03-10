@@ -81,7 +81,13 @@ def wait_for_message(whitelist: List[str], timeout_seconds: int = 60) -> Optiona
             else:
                 clean_whitelist.add(f"{item}@s.whatsapp.net")
             
-    return whatsapp_listen_for_messages(list(clean_whitelist), timeout_seconds)
+    result = whatsapp_listen_for_messages(list(clean_whitelist), timeout_seconds)
+    
+    if result and "error" in result:
+        # We still return the object, but the agent should see the error
+        pass
+        
+    return result
 
 @mcp.tool()
 def acknowledge_message(message_id: str) -> str:
@@ -133,6 +139,8 @@ messages and respond on behalf of the user.
 1. (Optional) Call `resolve_whitelist(identifiers=[...])` with phone numbers to get the exact WhatsApp JIDs.
 2. Call `wait_for_message(whitelist=[...])` with your allowed contacts.
 3. Handle the response:
+   - If `error` is in the response:
+     - **The WhatsApp bridge is likely disconnected or needs authentication.** Notify the user and ask them to check the bridge logs or scan the QR code if necessary.
    - If messages are returned (BATCH object):
      - The response looks like: `{ "batch_count": 2, "chats": { "jid1": [msg1, msg2], "jid2": [msg3] } }`
      - Iterate through each chat in `chats`.
