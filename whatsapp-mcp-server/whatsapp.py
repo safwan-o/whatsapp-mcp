@@ -49,14 +49,15 @@ def ensure_bridge_running() -> bool:
         subprocess.Popen([BRIDGE_BINARY], cwd=BRIDGE_DIR, stdout=log_file, stderr=log_file)
         
         # Wait for it to start and connect
-        for i in range(15):
-            time.sleep(2)
+        for i in range(20):
+            time.sleep(1)
             health = check_bridge_health()
             if health.get("success") and health.get("connected"):
                 print("Bridge started and connected successfully.")
                 return True
-            print(f"Waiting for bridge to connect... ({i+1}/15)")
+            print(f"Waiting for bridge to connect... ({i+1}/20)")
             
+        print("Timeout: Bridge started but could not connect to WhatsApp. Please check if you need to re-authenticate.")
         return False
     except Exception as e:
         print(f"Error starting bridge: {e}")

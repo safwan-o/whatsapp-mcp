@@ -52,10 +52,13 @@ def resolve_whitelist(identifiers: List[str]) -> List[str]:
 
 @mcp.tool()
 def wait_for_message(whitelist: List[str], timeout_seconds: int = 60) -> Optional[Dict[str, Any]]:
-    """Poll for new messages from whitelisted contacts.
+    """Poll for a new message from a whitelisted contact.
     
-    This tool is the 'Trigger' for autonomous mode. It will block until new 
-    messages arrive from the specified JIDs or phone numbers.
+    CRITICAL PRIORITY: This tool is the 'Trigger' for autonomous mode. It MUST be 
+    called immediately upon entering agent mode and kept in a tight loop.
+    
+    This tool will block until new messages arrive from the specified JIDs or 
+    phone numbers.
     
     Returns a BATCH of messages grouped by chat. You should process all of them.
     
@@ -135,25 +138,16 @@ def get_agent_instructions() -> str:
 You are now operating as an autonomous WhatsApp assistant. Your goal is to monitor for incoming 
 messages and respond on behalf of the user.
 
-## Operating Loop:
-1. (Optional) Call `resolve_whitelist(identifiers=[...])` with phone numbers to get the exact WhatsApp JIDs.
-2. Call `wait_for_message(whitelist=[...])` with your allowed contacts.
-3. Handle the response:
-   - If `error` is in the response:
-     - **The WhatsApp bridge is likely disconnected or needs authentication.** Notify the user and ask them to check the bridge logs or scan the QR code if necessary.
-   - If messages are returned (BATCH object):
-     - The response looks like: `{ "batch_count": 2, "chats": { "jid1": [msg1, msg2], "jid2": [msg3] } }`
-     - Iterate through each chat in `chats`.
-     - For each chat:
-       - Review all new messages.
-       - Formulate a response (or responses) based on the context of all messages.
-       - Use `send_message` or `send_file` to reply. 
-       - **REPLY FEATURE:** You can now reply to a specific message by providing its `id` in the `reply_to_id` parameter. This will "quote" the message in WhatsApp. Use this for clarity when responding to specific points in a multi-message batch.
-       - NOTE: Typing indicators and Read receipts are now AUTOMATED. You do NOT need to call `mark_as_read` or `set_typing` manually.
-       - IMPORTANT: Call `acknowledge_message(message_id=...)` for EACH processed message ID to prevent loops.
-   - If `None` is returned (timeout):
-     - **Simply repeat the loop and call `wait_for_message` again.** This is normal and means no messages arrived during the timeout period.
-4. Continue the loop indefinitely until an exit command is received.
+## Operating Loop (STRICT PRIORITY):
+1. **Trigger**: Call `wait_for_message(whitelist=[...])` immediately. 
+   - Use `resolve_whitelist` beforehand if you only have phone numbers.
+2. **Batch Processing**: If messages are returned:
+   - Response: `{ "batch_count": N, "chats": { "jid": [msgs] } }`
+   - Iterate through each chat and formulate responses.
+   - Use `send_message` or `send_file`.
+   - **Important**: Acknowledge each processed `message_id` immediately.
+3. **Repeat**: Return to step 1 **immediately** after processing.
+4. **Timeout**: If `wait_for_message` returns `None`, simply repeat step 1.
 
 ## Security & Privacy:
 - ONLY respond to users in the whitelist.

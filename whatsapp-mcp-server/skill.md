@@ -2,16 +2,21 @@
 
 This skill allows an LLM to operate as an autonomous assistant via WhatsApp. When this mode is activated, you monitor incoming messages from a whitelist and respond using your available tools.
 
+## 🔴 CRITICAL PRIORITY: STARTUP & LOOP
+**The `wait_for_message` tool is your highest priority.** 
+- In a new session, call `wait_for_message` **immediately** after verifying the connection. 
+- Do **not** wait for profile fetching or timezone setup if the user has already requested agent mode.
+- You must remain in the `wait_for_message` loop at all times when not actively processing a batch.
+
 ## How to Activate
-1. **Verify Connection**: Ensure the WhatsApp MCP server is connected and the bridge is running.
-2. **Set Whitelist**: Identify the phone numbers or JIDs you are allowed to respond to.
-   - **Tip**: WhatsApp uses different identifiers (JIDs) like `@s.whatsapp.net` and `@lid`.
-   - **Recommendation**: Use the `resolve_whitelist(identifiers=[...])` tool with your phone numbers to get all valid JIDs for those contacts.
-3. **Initialize Loop**: Call `get_agent_instructions()` to load the system persona and best practices.
-4. **Start Listening**: Enter a continuous loop calling `wait_for_message(whitelist=[...])` using the resolved JIDs.
+1. **Verify Connection**: Ensure the WhatsApp MCP server is connected.
+2. **Set Whitelist**: Identify the JIDs or phone numbers allowed.
+   - If using phone numbers, call `resolve_whitelist(identifiers=[...])` **once** to get valid JIDs.
+3. **Initialize & Listen**: Call `wait_for_message(whitelist=[...])` immediately. 
+   - **Note**: You should load agent persona/instructions (e.g. from `get_agent_instructions`) *during* the first processing turn or as a quick preliminary step, but do not let it delay the first poll if messages are expected.
 
 ## Operational Loop
-1. Call `wait_for_message`.
+1. Call `wait_for_message` (High Priority).
 2. Upon receiving a **Batch** of messages:
    - The response contains `batch_count` and a `chats` dictionary mapping JIDs to lists of message objects.
    - **Automated Features**: Read receipts and typing indicators are now automated. Messages are marked as read when retrieved, and typing status is shown while you process a response.
