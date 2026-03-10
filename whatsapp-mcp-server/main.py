@@ -16,11 +16,39 @@ from whatsapp import (
     listen_for_messages as whatsapp_listen_for_messages,
     acknowledge_message as whatsapp_acknowledge_message,
     mark_as_read as whatsapp_mark_as_read,
-    set_presence as whatsapp_set_presence
+    set_presence as whatsapp_set_presence,
+    resolve_jids as whatsapp_resolve_jids
 )
 
 # Initialize FastMCP server
 mcp = FastMCP("whatsapp")
+
+@mcp.tool()
+def resolve_whitelist(identifiers: List[str]) -> List[str]:
+    """Resolve a list of phone numbers or JIDs to a complete list of valid WhatsApp JIDs.
+    
+    This is useful for preparing a whitelist for `wait_for_message`. It searches the 
+    local database for all JIDs (including @s.whatsapp.net and @lid) associated with 
+    the provided phone numbers.
+    
+    Args:
+        identifiers: List of phone numbers (e.g. '88017...') or JIDs.
+    """
+    resolved_whitelist = set()
+    for item in identifiers:
+        if "@" in item:
+            resolved_whitelist.add(item)
+        else:
+            # Try to resolve phone number to JIDs
+            jids = whatsapp_resolve_jids(item)
+            if jids:
+                for jid in jids:
+                    resolved_whitelist.add(jid)
+            else:
+                # Fallback to standard format if nothing found in DB
+                resolved_whitelist.add(f"{item}@s.whatsapp.net")
+                
+    return list(resolved_whitelist)
 
 @mcp.tool()
 def wait_for_message(whitelist: List[str], timeout_seconds: int = 60) -> Optional[Dict[str, Any]]:
@@ -31,20 +59,29 @@ def wait_for_message(whitelist: List[str], timeout_seconds: int = 60) -> Optiona
     
     Returns a BATCH of messages grouped by chat. You should process all of them.
     
+    IMPORTANT: If you provide phone numbers, this tool will automatically try to 
+    resolve them to all valid JIDs (like @s.whatsapp.net and @lid) found in the 
+    local database.
+    
     Args:
         whitelist: List of phone numbers (e.g. '1234567890') or JIDs (e.g. '1234567890@s.whatsapp.net') 
                   that the agent is allowed to respond to.
         timeout_seconds: Maximum time to wait before returning (default 60).
     """
-    # Clean whitelist to ensure JID format
-    clean_whitelist = []
+    # Auto-resolve whitelist to ensure all JID variants (@s.whatsapp.net, @lid) are captured
+    clean_whitelist = set()
     for item in whitelist:
-        if "@" not in item:
-            clean_whitelist.append(f"{item}@s.whatsapp.net")
+        if "@" in item:
+            clean_whitelist.add(item)
         else:
-            clean_whitelist.append(item)
+            jids = whatsapp_resolve_jids(item)
+            if jids:
+                for jid in jids:
+                    clean_whitelist.add(jid)
+            else:
+                clean_whitelist.add(f"{item}@s.whatsapp.net")
             
-    return whatsapp_listen_for_messages(clean_whitelist, timeout_seconds)
+    return whatsapp_listen_for_messages(list(clean_whitelist), timeout_seconds)
 
 @mcp.tool()
 def acknowledge_message(message_id: str) -> str:
@@ -93,19 +130,22 @@ You are now operating as an autonomous WhatsApp assistant. Your goal is to monit
 messages and respond on behalf of the user.
 
 ## Operating Loop:
-1. Call `wait_for_message(whitelist=[...])` with your allowed contacts.
-2. If messages are returned (it returns a BATCH object):
-   - The response looks like: `{ "batch_count": 2, "chats": { "jid1": [msg1, msg2], "jid2": [msg3] } }`
-   - Iterate through each chat in `chats`.
-   - For each chat:
-   - Review all new messages.
-   - Formulate a response (or responses) based on the context of all messages.
-   - Use `send_message` or `send_file` to reply. 
-   - **REPLY FEATURE:** You can now reply to a specific message by providing its `id` in the `reply_to_id` parameter. This will "quote" the message in WhatsApp. Use this for clarity when responding to specific points in a multi-message batch.
-   - NOTE: Typing indicators and Read receipts are now AUTOMATED. You do NOT need to call `mark_as_read` or `set_typing` manually.
-   - IMPORTANT: Call `acknowledge_message(message_id=...)` for EACH processed message ID to prevent loops.
-
-3. Repeat the loop.
+1. (Optional) Call `resolve_whitelist(identifiers=[...])` with phone numbers to get the exact WhatsApp JIDs.
+2. Call `wait_for_message(whitelist=[...])` with your allowed contacts.
+3. Handle the response:
+   - If messages are returned (BATCH object):
+     - The response looks like: `{ "batch_count": 2, "chats": { "jid1": [msg1, msg2], "jid2": [msg3] } }`
+     - Iterate through each chat in `chats`.
+     - For each chat:
+       - Review all new messages.
+       - Formulate a response (or responses) based on the context of all messages.
+       - Use `send_message` or `send_file` to reply. 
+       - **REPLY FEATURE:** You can now reply to a specific message by providing its `id` in the `reply_to_id` parameter. This will "quote" the message in WhatsApp. Use this for clarity when responding to specific points in a multi-message batch.
+       - NOTE: Typing indicators and Read receipts are now AUTOMATED. You do NOT need to call `mark_as_read` or `set_typing` manually.
+       - IMPORTANT: Call `acknowledge_message(message_id=...)` for EACH processed message ID to prevent loops.
+   - If `None` is returned (timeout):
+     - **Simply repeat the loop and call `wait_for_message` again.** This is normal and means no messages arrived during the timeout period.
+4. Continue the loop indefinitely until an exit command is received.
 
 ## Security & Privacy:
 - ONLY respond to users in the whitelist.

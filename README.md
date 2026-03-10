@@ -136,6 +136,7 @@ Claude can access the following tools to interact with WhatsApp:
 - **get_contact_chats**: List all chats involving a specific contact
 - **get_last_interaction**: Get the most recent message with a contact
 - **get_message_context**: Retrieve context around a specific message
+- **resolve_whitelist**: Resolve phone numbers to a complete list of valid WhatsApp JIDs (@s.whatsapp.net and @lid)
 - **send_message**: Send a WhatsApp message to a recipient. Supports `reply_to_id` for quoting specific messages.
 - **send_file**: Send a file (image, video, raw audio, document) to a recipient. Supports `reply_to_id`.
 - **send_audio_message**: Send an audio file as a WhatsApp voice message. Supports `reply_to_id`.

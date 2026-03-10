@@ -622,6 +622,29 @@ def get_direct_chat_by_contact(sender_phone_number: str) -> Optional[Chat]:
         if 'conn' in locals():
             conn.close()
 
+def resolve_jids(phone_number: str) -> List[str]:
+    """Find all JIDs in the database associated with a given phone number."""
+    try:
+        conn = sqlite3.connect(MESSAGES_DB_PATH)
+        cursor = conn.cursor()
+        
+        # Search for JIDs that contain the phone number and are not groups
+        cursor.execute("""
+            SELECT jid
+            FROM chats
+            WHERE jid LIKE ? AND jid NOT LIKE '%@g.us'
+        """, (f"%{phone_number}%",))
+        
+        rows = cursor.fetchall()
+        return [row[0] for row in rows]
+        
+    except sqlite3.Error as e:
+        print(f"Database error in resolve_jids: {e}")
+        return []
+    finally:
+        if 'conn' in locals():
+            conn.close()
+
 def send_message(recipient: str, message: str, reply_to_id: Optional[str] = None) -> Tuple[bool, str]:
     try:
         # Automate typing indicator
